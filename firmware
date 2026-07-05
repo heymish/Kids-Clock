@@ -386,7 +386,7 @@ void handleRoot() {
   html += "<select name='tzPreset'>";
 
   for (int i = 0; i < timezoneOptionCount; i++) {
-    html += "<option valuering(timezoneOptions[i].posix));
+    html += "<option valuering(timezoneOptions[i].posix))";
     html += "'";
 
     if (timezoneString == timezoneOptions[i].posix) {
