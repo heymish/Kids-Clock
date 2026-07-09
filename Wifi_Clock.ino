@@ -673,7 +673,7 @@ void updateDisplay()
     if (timeText[0] == '0') {
       memmove(timeText, timeText + 1, strlen(timeText));
     }
-
+  }
   if (lastDisplayedTime != String(timeText))
   {
     lastDisplayedTime = String(timeText);
