@@ -22,6 +22,7 @@
 #include <MD_Parola.h>
 #include <MD_MAX72xx.h>
 #include <SPI.h>
+#include <ArduinoOTA.h>
 
 // --------------------------------------------------
 // MAX7219 display settings
@@ -96,6 +97,15 @@ bool use24HourClock = true;
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastNtpSyncAttempt = 0;
 String lastDisplayedTime = "";
+
+
+// --------------------------------------------------
+// OTA settings
+// --------------------------------------------------
+String otaHostname = "kids-clock";
+String otaPassword = "clockota";
+bool otaReady = false;
+
 
 // --------------------------------------------------
 // Helper functions
@@ -191,6 +201,50 @@ String currentIpText()
 
   return "Not connected";
 }
+
+
+void setupOTA() {
+  if (WiFi.status() != WL_CONNECTED) {
+    otaReady = false;
+    return;
+  }
+
+  ArduinoOTA.setHostname(otaHostname.c_str());
+  ArduinoOTA.setPassword(otaPassword.c_str());
+
+  ArduinoOTA
+    .onStart( {
+      display.displayClear();
+      display.setTextAlignment(PA_CENTER);
+      display.print("OTA");
+    })
+    .onEnd( {
+      display.displayClear();
+      display.setTextAlignment(PA_CENTER);
+      display.print("DONE");
+    })
+    .onProgress(unsigned int progress, unsigned int total {
+      int percent = (progress * 100) / total;
+      display.displayClear();
+      display.setTextAlignment(PA_CENTER);
+      display.print(String(percent) + "%");
+    })
+    .onError(ota_error_t error {
+      display.displayClear();
+      display.setTextAlignment(PA_CENTER);
+
+      if (error == OTA_AUTH_ERROR) display.print("AUTH");
+      else if (error == OTA_BEGIN_ERROR) display.print("BEGIN");
+      else if (error == OTA_CONNECT_ERROR) display.print("CONN");
+      else if (error == OTA_RECEIVE_ERROR) display.print("RECV");
+      else if (error == OTA_END_ERROR) display.print("END");
+      else display.print("ERR");
+    });
+
+  ArduinoOTA.begin();
+  otaReady = true;
+}
+
 
 // --------------------------------------------------
 // Persistent settings
@@ -480,6 +534,13 @@ void handleRoot()
   html += "<div><label>Night brightness 0-15</label><input name='nightBright' type='number' min='0' max='15' value='" + String(nightBrightness) + "'></div>";
   html += "<div><label>Dim start</label><input name='dimStart' type='time' value='" + htmlEscape(dimStart) + "'></div>";
   html += "<div><label>Dim end</label><input name='dimEnd' type='time' value='" + htmlEscape(dimEnd) + "'></div>";
+  
+html += "<div class='status'>";
+html += "IP: " + ipText + "<br>";
+html += "OTA: ";
+html += otaReady ? "Enabled" : "Not available";
+html += "<br>OTA Hostname: " + htmlEscape(otaHostname);
+html += "</div>";
 	
   html += "<label for='clockFormat'>Clock display</label>";
   html += "<select id='clockFormat' name='clockFormat'>";
@@ -722,6 +783,12 @@ void setup()
 
   connectWiFi();
   setupWebServer();
+
+	
+  if (WiFi.status() == WL_CONNECTED) {
+    setupOTA();
+  }
+
 }
 
 void loop()
@@ -734,6 +801,12 @@ void loop()
   server.handleClient();
   maintainWiFi();
   updateDisplay();
+
+
+if (otaReady) {
+    ArduinoOTA.handle();
+  }
+
 
   if (!setupMode && WiFi.status() == WL_CONNECTED && !timeIsValid() && millis() - lastNtpSyncAttempt > 60000)
   {
