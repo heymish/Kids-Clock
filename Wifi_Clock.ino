@@ -5,6 +5,7 @@
 #include <MD_Parola.h>
 #include <MD_MAX72xx.h>
 #include <SPI.h>
+#include <ESPmDNS.h>
 
 // --------------------------------------------------
 // MAX7219 display settings
@@ -90,6 +91,7 @@ String gateway  = "192.168.1.1";
 String subnet   = "255.255.255.0";
 String dns1     = "8.8.8.8";
 String dns2     = "1.1.1.1";
+String dnsName = "esp32-clock";
 
 String ntpServer = "nz.pool.ntp.org";
 
@@ -171,6 +173,7 @@ void loadSettings() {
   subnet   = prefs.getString("subnet", "255.255.255.0");
   dns1     = prefs.getString("dns1", "8.8.8.8");
   dns2     = prefs.getString("dns2", "1.1.1.1");
+  dnsName  = prefs.getString("hostname", "esp32-clock");
 
   ntpServer = prefs.getString("ntp", "nz.pool.ntp.org");
   timezoneString = prefs.getString("tz", "NZST-12NZDT,M9.5.0,M4.1.0/3");
@@ -199,6 +202,7 @@ void saveSettings() {
   prefs.putString("subnet", subnet);
   prefs.putString("dns1", dns1);
   prefs.putString("dns2", dns2);
+  prefs.putString("hostname", dnsName);
 
   prefs.putString("ntp", ntpServer);
   prefs.putString("tz", timezoneString);
@@ -261,7 +265,9 @@ void applyTimezone(){
 // --------------------------------------------------
 void connectWiFi() {
   WiFi.mode(WIFI_STA);
-
+  WiFi.setHostname(dnsName.c_str());
+  MDNS.begin(dnsName.c_str());
+  
   Serial.println();
   Serial.println("============ connectWifi() Called ============");
 
@@ -410,6 +416,12 @@ void handleRoot() {
   html += "<input name='dns2' value='" + htmlEscape(dns2) + "'>";
   html += "</div>";
 
+  html += "<label>Device Hostname</label>";
+  html += "<input name='hostname' value='" + htmlEscape(dnsName) + "'>";
+  html += "<p class='hint'>Example: esp32-clock. Device may be reachable as esp32-clock.local</p>";
+
+  html += "<br><strong>Hostname:</strong> " + htmlEscape(dnsName);
+
   html += "<div class='section'>";
   html += "<h2>Time</h2>";
 
@@ -492,6 +504,13 @@ void handleSave() {
   subnet   = server.arg("subnet");
   dns1     = server.arg("dns1");
   dns2     = server.arg("dns2");
+
+  dnsName = server.arg("hostname");
+
+  if (dnsName.length() == 0)
+  {
+    dnsName = "esp32-clock";
+  }
 
   ntpServer = server.arg("ntp");
 
@@ -577,7 +596,7 @@ void updateDisplay() {
     display.setIntensity(dayBrightness);
   }
 
-  char timeText[6];
+  char timeText[9];
   snprintf(timeText, sizeof(timeText), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
 
   String currentText = String(timeText);
