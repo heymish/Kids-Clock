@@ -91,6 +91,7 @@ int dayBrightness = 8;      // 0-15
 int nightBrightness = 1;    // 0-15
 String dimStart = "20:00";
 String dimEnd = "07:00";
+bool use24HourClock = true;
 
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastNtpSyncAttempt = 0;
@@ -211,6 +212,7 @@ void loadSettings()
   nightBrightness = prefs.getInt("nightBright", 1);
   dimStart = prefs.getString("dimStart", "20:00");
   dimEnd = prefs.getString("dimEnd", "07:00");
+  use24HourClock = prefs.getBool("24hour", true);
   prefs.end();
 
   dayBrightness = constrain(dayBrightness, 0, 15);
@@ -234,6 +236,7 @@ void saveSettings()
   prefs.putInt("nightBright", nightBrightness);
   prefs.putString("dimStart", dimStart);
   prefs.putString("dimEnd", dimEnd);
+  prefs.putBool("24hour", use24HourClock);
   prefs.end();
 }
 
@@ -477,6 +480,18 @@ void handleRoot()
   html += "<div><label>Night brightness 0-15</label><input name='nightBright' type='number' min='0' max='15' value='" + String(nightBrightness) + "'></div>";
   html += "<div><label>Dim start</label><input name='dimStart' type='time' value='" + htmlEscape(dimStart) + "'></div>";
   html += "<div><label>Dim end</label><input name='dimEnd' type='time' value='" + htmlEscape(dimEnd) + "'></div>";
+	
+  html += "<label for='clockFormat'>Clock display</label>";
+  html += "<select id='clockFormat' name='clockFormat'>";
+  html += "<option value='24'";
+  if (use24HourClock) html += " selected";
+     html += ">24 hour, e.g. 21:05</option>";
+
+   html += "<option value='12'";
+  if (!use24HourClock) html += " selected";
+    html += ">12 hour, e.g. 9:05 PM</option>";
+  html += "</select>";
+
   html += "</div></div>";
 
   html += "<button type='submit'>Save and Restart</button>";
@@ -524,6 +539,8 @@ void handleSave()
   nightBrightness = constrain(getArgOrCurrent("nightBright", String(nightBrightness)).toInt(), 0, 15);
   dimStart = getArgOrCurrent("dimStart", dimStart);
   dimEnd = getArgOrCurrent("dimEnd", dimEnd);
+  use24HourClock = server.arg("clockFormat") == "24";
+	
 
   saveSettings();
 
@@ -643,7 +660,19 @@ void updateDisplay()
   display.setIntensity(night ? nightBrightness : dayBrightness);
 
   char timeText[6];
-  snprintf(timeText, sizeof(timeText), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+  //snprintf(timeText, sizeof(timeText), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+
+  if (use24HourClock) {
+    // 24-hour display, e.g. 21:05
+    strftime(timeText, sizeof(timeText), "%H:%M", &timeinfo);
+  } else {
+    // 12-hour display, e.g. 9:05
+    strftime(timeText, sizeof(timeText), "%I:%M", &timeinfo);
+
+    // Remove leading zero, e.g. "09:05" -> "9:05"
+    if (timeText[0] == '0') {
+      memmove(timeText, timeText + 1, strlen(timeText));
+    }
 
   if (lastDisplayedTime != String(timeText))
   {
