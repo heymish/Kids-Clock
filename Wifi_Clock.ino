@@ -3,14 +3,17 @@
   File: wifi_clock.ino
 
   Changes included:
-  - Keeps the existing WebServer-based configuration page approach
-  - Adds DNSServer captive portal support
-  - Redirects captive portal detection and unknown HTTP requests back to the setup page
-  - Generates a dynamic open AP name from the ESP32 MAC address, e.g. KidsClock-A1B2
-  - Removes the hard-coded setup AP password
-  - Adds a Reset Wi-Fi button in the web UI
+Fix first-boot setup AP when SSID is empty
+Add wi-fi reconnect logicc after boot
+Validate web form  input before saving 
+Check write results for preferences and report failures
+Track NTP Validity
+Add second NTP server incase first does not work
+Split static HTML out of main file
+Fix WebUI layout
+Add custom timezone input
 
-  Board: ESP32
+  Board: ESP32-C6
   Display: MAX7219 4-module FC16 matrix
 */
 
