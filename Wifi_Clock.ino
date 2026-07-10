@@ -29,9 +29,9 @@
 // --------------------------------------------------
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 4
-#define DATA_PIN 7
-#define CLK_PIN 6
-#define CS_PIN 10
+#define DATA_PIN 15
+#define CLK_PIN 7
+#define CS_PIN 6
 
 MD_Parola display = MD_Parola(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
@@ -213,32 +213,26 @@ void setupOTA() {
   ArduinoOTA.setPassword(otaPassword.c_str());
 
   ArduinoOTA
-    .onStart( {
+    .onStart([]() {
       display.displayClear();
       display.setTextAlignment(PA_CENTER);
       display.print("OTA");
     })
-    .onEnd( {
+    .onEnd([] () {
       display.displayClear();
       display.setTextAlignment(PA_CENTER);
       display.print("DONE");
     })
-    .onProgress(unsigned int progress, unsigned int total {
+    .onProgress([] (unsigned int progress, unsigned int total) {
       int percent = (progress * 100) / total;
       display.displayClear();
       display.setTextAlignment(PA_CENTER);
       display.print(String(percent) + "%");
     })
-    .onError(ota_error_t error {
+    .onError([] (ota_error_t error) {
       display.displayClear();
       display.setTextAlignment(PA_CENTER);
-
-      if (error == OTA_AUTH_ERROR) display.print("AUTH");
-      else if (error == OTA_BEGIN_ERROR) display.print("BEGIN");
-      else if (error == OTA_CONNECT_ERROR) display.print("CONN");
-      else if (error == OTA_RECEIVE_ERROR) display.print("RECV");
-      else if (error == OTA_END_ERROR) display.print("END");
-      else display.print("ERR");
+      display.print("ERR");
     });
 
   ArduinoOTA.begin();
@@ -346,11 +340,21 @@ void startSetupAccessPoint()
 
 bool connectWiFiStation()
 {
+  Serial.println("connectionWiFIStation() Called");
   if (wifiSsid.length() == 0)
   {
+    Serial.println("No SSID configured");
     return false;
   }
 
+  if (wifiPassword.length() == 0)
+  {
+    Serial.println("No Passowrd configured");
+    return false;
+  }
+
+  Serial.print("Trying SSID:");
+  Serial.println(wifiSsid);
   WiFi.mode(WIFI_STA);
 
   if (!useDhcp)
@@ -398,9 +402,15 @@ bool connectWiFiStation()
 
 void connectWiFi()
 {
+  Serial.println("connectionWifi()");
   if (!connectWiFiStation())
   {
+    Serial.println("Starting AP becasue Wifi connection failed");
     startSetupAccessPoint();
+  }
+  else
+  {
+    Serial.println("Wifi connected successfully");
   }
 }
 
@@ -536,7 +546,7 @@ void handleRoot()
   html += "<div><label>Dim end</label><input name='dimEnd' type='time' value='" + htmlEscape(dimEnd) + "'></div>";
   
 html += "<div class='status'>";
-html += "IP: " + ipText + "<br>";
+html += "IP: " + htmlEscape(currentIpText()) + "<br>";
 html += "OTA: ";
 html += otaReady ? "Enabled" : "Not available";
 html += "<br>OTA Hostname: " + htmlEscape(otaHostname);
@@ -784,8 +794,12 @@ void setup()
   connectWiFi();
   setupWebServer();
 
-	
+  //startSetupAccessPoint();
+
   if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Wifi connected");
+    Serial.print("Wifi status before OTA: ");
+    Serial.println(WiFi.status());
     setupOTA();
   }
 
@@ -801,11 +815,11 @@ void loop()
   server.handleClient();
   maintainWiFi();
   updateDisplay();
+  
 
-
-if (otaReady) {
+ if (otaReady) {
     ArduinoOTA.handle();
-  }
+}
 
 
   if (!setupMode && WiFi.status() == WL_CONNECTED && !timeIsValid() && millis() - lastNtpSyncAttempt > 60000)
