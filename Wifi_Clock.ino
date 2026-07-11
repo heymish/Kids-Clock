@@ -96,6 +96,7 @@ int nightBrightness = 1;    // 0-15
 String dimStart = "20:00";
 String dimEnd = "07:00";
 bool use24HourClock = true;
+String hostname = "kidsclock";
 
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastNtpSyncAttempt = 0;
@@ -264,6 +265,7 @@ void loadSettings()
   dimStart = prefs.getString("dimStart", "20:00");
   dimEnd = prefs.getString("dimEnd", "07:00");
   use24HourClock = prefs.getBool("24hour", true);
+  hostname = prefs.getString("hostname", "kidsclock");
   prefs.end();
 
   dayBrightness = constrain(dayBrightness, 0, 15);
@@ -288,6 +290,7 @@ void saveSettings()
   prefs.putString("dimStart", dimStart);
   prefs.putString("dimEnd", dimEnd);
   prefs.putBool("24hour", use24HourClock);
+  prefs.putString("hostname", hostname);
   prefs.end();
 }
 
@@ -381,7 +384,7 @@ bool connectWiFiStation()
       Serial.println("Invalid static IP settings; falling back to DHCP for this boot.");
     }
   }
-
+  WiFi.setHostname(hostname);
   showMessage("WiFi");
   WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
 
@@ -516,6 +519,7 @@ void handleRoot()
   html += "<div><label>Subnet</label><input name='subnet' value='" + htmlEscape(subnet) + "'></div>";
   html += "<div><label>DNS 1</label><input name='dns1' value='" + htmlEscape(dns1) + "'></div>";
   html += "<div><label>DNS 2</label><input name='dns2' value='" + htmlEscape(dns2) + "'></div>";
+  html += "<div><label>Hostname</label><input name='hostname' value='" + htmlEscape(hostname) + "'></div>";
   html += "</div></div>";
 
   html += "<div class='section'><h2>Time</h2>";
@@ -602,6 +606,16 @@ void handleSave()
   }
 
   useDhcp = server.arg("dhcp") == "1";
+
+  if (!useDhcp) {
+  IPAddress ip, gw, sn, d1, d2;
+  if (!parseIpAddress(staticIp, ip) || !parseIpAddress(gateway, gw) || 
+      !parseIpAddress(subnet, sn) || !parseIpAddress(dns1, d1) || 
+      !parseIpAddress(dns2, d2)) {
+    server.send(400, "text/html", "Invalid IP settings");
+    return;
+  }
+}
   staticIp = getArgOrCurrent("ip", staticIp);
   gateway = getArgOrCurrent("gw", gateway);
   subnet = getArgOrCurrent("subnet", subnet);
@@ -614,6 +628,7 @@ void handleSave()
   dimStart = getArgOrCurrent("dimStart", dimStart);
   dimEnd = getArgOrCurrent("dimEnd", dimEnd);
   use24HourClock = server.arg("clockFormat") == "24";
+  hostname = getArgOrCurrent("hostname", hostname);
 	
 
   saveSettings();
@@ -733,7 +748,7 @@ void updateDisplay()
   bool night = isNightTime(currentMinutes, startMinutes, endMinutes);
   display.setIntensity(night ? nightBrightness : dayBrightness);
 
-  char timeText[6];
+  char timeText[8];
   //snprintf(timeText, sizeof(timeText), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
 
   if (use24HourClock) {
