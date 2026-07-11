@@ -206,6 +206,45 @@ String currentIpText()
   return "Not connected";
 }
 
+//ToDO: Need to use this code.
+//This is very much a basic check
+bool isValidPOSIX_TZ(const char *tz) {
+    if (!tz || strlen(tz) < 3) return false;
+
+    // 1. Standard Time Name (e.g., EST or GMT)
+    const char *p = tz;
+    while (*p && isalpha(*p)) p++;
+    if (p == tz) return false; // No letters found
+
+    // 2. Standard Time Offset (e.g., 5, -5, +01:30)
+    if (*p == '+' || *p == '-') p++;
+    if (!isdigit(*p)) return false;
+    while (*p && (isdigit(*p) || *p == ':')) p++;
+
+    // If string ends here, it's a valid POSIX TZ without DST (e.g., GMT0, JST-9)
+    if (*p == '\0') return true; 
+
+    // 3. Daylight Saving Time Name (e.g., EDT, DST)
+    if (*p == ',') p++;
+    else if (!isalpha(*p)) return false; // Next part should be DST name or transition
+    
+    while (*p && isalpha(*p)) p++;
+    if (*p == '\0') return false; // Found DST name but no offset
+
+    // 4. Daylight Saving Time Offset (Optional)
+    if (*p == '+' || *p == '-') p++;
+    while (*p && (isdigit(*p) || *p == ':')) p++;
+
+    // If string ends here, DST offset defaults to 1 hour ahead
+    if (*p == '\0') return true; 
+
+    // 5. Rule Transitions (e.g., ,M3.2.0/2:00,M11.1.0/2:00)
+    if (*p != ',') return false; 
+    
+    // Minimal check for M-rule (M<month>.<week>.<day>/<time>)
+    // For a strict compliance check, you would parse and validate the numeric boundaries (e.g., M1..12)
+    return true; 
+}
 
 void setupOTA() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -597,7 +636,15 @@ String getArgOrCurrent(const char *name, const String &currentValue)
 
 void handleSave()
 {
-  wifiSsid = getArgOrCurrent("ssid", wifiSsid);
+  if (server.arg("ssid").length() > 0)
+  {
+   wifiSsid = getArgOrCurrent("ssid", wifiSsid);
+  }
+  else
+  {
+    server.send(400, "text/html", "SSID cannot be empty");
+    return; 
+  }
 
   // Keep the existing stored password if the password field is left blank.
   if (server.hasArg("pass") && server.arg("pass").length() > 0)
@@ -616,6 +663,8 @@ void handleSave()
     return;
   }
 }
+
+ 
   staticIp = getArgOrCurrent("ip", staticIp);
   gateway = getArgOrCurrent("gw", gateway);
   subnet = getArgOrCurrent("subnet", subnet);
