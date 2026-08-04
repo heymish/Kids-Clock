@@ -95,6 +95,7 @@ int dayBrightness = 8;      // 0-15
 int nightBrightness = 1;    // 0-15
 String dimStart = "20:00";
 String dimEnd = "07:00";
+int brightnessTransitionMinutes = 30; // 0 = instant brightness change
 bool use24HourClock = true;
 String hostname = "kidsclock";
 
@@ -162,6 +163,54 @@ bool isNightTime(int currentMinutes, int startMinutes, int endMinutes)
     return currentMinutes >= startMinutes || currentMinutes < endMinutes;
   }
   return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+}
+int minutesSince(int startMinutes, int currentMinutes)
+{
+  return (currentMinutes - startMinutes + 1440) % 1440;
+}
+
+int interpolateBrightness(int fromBrightness, int toBrightness, int elapsedMinutes, int durationMinutes)
+{
+  if (durationMinutes <= 0)
+  {
+    return toBrightness;
+  }
+
+  float progress = (float)elapsedMinutes / (float)durationMinutes;
+  progress = constrain(progress, 0.0f, 1.0f);
+
+  int calculatedBrightness = round(fromBrightness + ((toBrightness - fromBrightness) * progress));
+  return constrain(calculatedBrightness, 0, 15);
+}
+
+int calculateBrightness(int currentMinutes)
+{
+  int startMinutes = timeStringToMinutes(dimStart);
+  int endMinutes = timeStringToMinutes(dimEnd);
+
+  int nightLength = minutesSince(startMinutes, endMinutes);
+  int dayLength = minutesSince(endMinutes, startMinutes);
+  int maxSafeTransition = min(nightLength, dayLength);
+  int transitionMinutes = constrain(brightnessTransitionMinutes, 0, maxSafeTransition);
+
+  if (transitionMinutes <= 0)
+  {
+    return isNightTime(currentMinutes, startMinutes, endMinutes) ? nightBrightness : dayBrightness;
+  }
+
+  int dimDownElapsed = minutesSince(startMinutes, currentMinutes);
+  if (dimDownElapsed < transitionMinutes)
+  {
+    return interpolateBrightness(dayBrightness, nightBrightness, dimDownElapsed, transitionMinutes);
+  }
+
+  int brightenUpElapsed = minutesSince(endMinutes, currentMinutes);
+  if (brightenUpElapsed < transitionMinutes)
+  {
+    return interpolateBrightness(nightBrightness, dayBrightness, brightenUpElapsed, transitionMinutes);
+  }
+
+  return isNightTime(currentMinutes, startMinutes, endMinutes) ? nightBrightness : dayBrightness;
 }
 
 String makeSetupApName()
@@ -303,12 +352,14 @@ void loadSettings()
   nightBrightness = prefs.getInt("nightBright", 1);
   dimStart = prefs.getString("dimStart", "20:00");
   dimEnd = prefs.getString("dimEnd", "07:00");
+  brightnessTransitionMinutes = prefs.getInt("fadeMins", 30);
   use24HourClock = prefs.getBool("24hour", true);
   hostname = prefs.getString("hostname", "kidsclock");
   prefs.end();
 
   dayBrightness = constrain(dayBrightness, 0, 15);
   nightBrightness = constrain(nightBrightness, 0, 15);
+  brightnessTransitionMinutes = constrain(brightnessTransitionMinutes, 0, 720);
 }
 
 void saveSettings()
@@ -328,6 +379,7 @@ void saveSettings()
   prefs.putInt("nightBright", nightBrightness);
   prefs.putString("dimStart", dimStart);
   prefs.putString("dimEnd", dimEnd);
+  prefs.putInt("fadeMins", brightnessTransitionMinutes);
   prefs.putBool("24hour", use24HourClock);
   prefs.putString("hostname", hostname);
   prefs.end();
@@ -590,6 +642,8 @@ void handleRoot()
   html += "<div><label>Night brightness 0-15</label><input name='nightBright' type='number' min='0' max='15' value='" + String(nightBrightness) + "'></div>";
   html += "<div><label>Dim start</label><input name='dimStart' type='time' value='" + htmlEscape(dimStart) + "'></div>";
   html += "<div><label>Dim end</label><input name='dimEnd' type='time' value='" + htmlEscape(dimEnd) + "'></div>";
+  html += "<div><label>Brightness transition, minutes</label><input name='fadeMins' type='number' min='0' max='720' value='" + String(brightnessTransitionMinutes) + "'></div>";
+  html += "<p class='hint'>0 means instant change. Example: 30 fades brightness over 30 minutes.</p>";
   
 html += "<div class='status'>";
 html += "IP: " + htmlEscape(currentIpText()) + "<br>";
@@ -676,6 +730,7 @@ void handleSave()
   nightBrightness = constrain(getArgOrCurrent("nightBright", String(nightBrightness)).toInt(), 0, 15);
   dimStart = getArgOrCurrent("dimStart", dimStart);
   dimEnd = getArgOrCurrent("dimEnd", dimEnd);
+  brightnessTransitionMinutes = constrain(getArgOrCurrent("fadeMins", String(brightnessTransitionMinutes)).toInt(), 0, 720);
   use24HourClock = server.arg("clockFormat") == "24";
   hostname = getArgOrCurrent("hostname", hostname);
 	
@@ -792,10 +847,7 @@ void updateDisplay()
   }
 
   int currentMinutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
-  int startMinutes = timeStringToMinutes(dimStart);
-  int endMinutes = timeStringToMinutes(dimEnd);
-  bool night = isNightTime(currentMinutes, startMinutes, endMinutes);
-  display.setIntensity(night ? nightBrightness : dayBrightness);
+  display.setIntensity(calculateBrightness(currentMinutes));
 
   char timeText[8];
   //snprintf(timeText, sizeof(timeText), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
