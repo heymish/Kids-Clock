@@ -475,7 +475,7 @@ bool connectWiFiStation()
       Serial.println("Invalid static IP settings; falling back to DHCP for this boot.");
     }
   }
-  WiFi.setHostname(hostname);
+  WiFi.setHostname(hostname.c_str());
   showMessage("WiFi");
   WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
 
